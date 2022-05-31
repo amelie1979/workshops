@@ -44,7 +44,69 @@ Modifiez le fichier site.yml et ajoutez une définition et quelques tâches à v
 <!-- {% endraw %} -->
 
 > **Note**
->
+>---
+- hosts: windows
+  name: This is a play within a playbook
+  vars:
+    iis_sites:
+      - name: 'Ansible Playbook Test'
+        port: '8080'
+        path: 'C:\sites\playbooktest'
+      - name: 'Ansible Playbook Test 2'
+        port: '8081'
+        path: 'C:\sites\playbooktest2'
+    iis_test_message: "Hello World!  My test IIS Server"
+
+  tasks:
+    - name: Install IIS
+      win_feature:
+        name: Web-Server
+        state: present
+
+    - name: Create site directory structure
+      win_file:
+        path: "{{ item.path }}"
+        state: directory
+      with_items: "{{ iis_sites }}"
+
+    - name: Create IIS site
+      win_iis_website:
+        name: "{{ item.name }}"
+        state: started
+        port: "{{ item.port }}"
+        physical_path: "{{ item.path }}"
+      with_items: "{{ iis_sites }}"
+      notify: restart iis service    
+
+    - name: Open port for site on the firewall
+      win_firewall_rule:
+        name: "iisport{{ item.port }}"
+        enable: yes
+        state: present
+        localport: "{{ item.port }}"
+        action: Allow
+        direction: In
+        protocol: Tcp
+      with_items: "{{ iis_sites }}"
+
+    - name: Template simple web site to iis_site_path as index.html
+      win_template:
+        src: 'index.html.j2'
+        dest: '{{ item.path }}\index.html'
+      with_items: "{{ iis_sites }}"
+
+    - name: Show website addresses
+      debug:
+        msg: "{{ item }}"
+      loop:
+        - http://{{ ansible_host }}:8080
+        - http://{{ ansible_host }}:8081
+  handlers:
+    - name: restart iis service
+      win_service:
+        name: W3Svc
+        state: restarted
+        start_mode: auto          
 > **Que faisons-nous ici ?**
 >
 > -   `win_updates:` Ce module est utilisé pour vérifier ou installer des mises à jour. Nous lui demandons d'installer uniquement les mises à jour de catégories spécifiques à l'aide d'une variable. L'attribut `reboot` redémarrera automatiquement l'hôte distant s'il est requis et continuera à installer les mises à jour après le redémarrage. Nous utiliserons également une variable modifiable via un formulaire pour nous permettre d'empécher le rédemarrage quand c'est nécessaire. Si la valeur reboot_server n'est pas spécifiée, nous définirons l'attribut par defaut à true.
@@ -102,7 +164,7 @@ Cliquez sur ENREGISTRER ![Save](images/at_save.png) puis cliquez sur Survey en h
 Étape 3:
 --------
 
-Cliquez sur Ass et remplissez le questionnaire avec les valeurs suivantes
+Cliquez sur Ajouter (add) et remplissez le questionnaire avec les valeurs suivantes
 
 | Clé                     | Valeur                                                                                                                                                 | Note                                         |
 |-------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------|
